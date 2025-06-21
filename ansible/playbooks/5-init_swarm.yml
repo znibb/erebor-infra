@@ -1,0 +1,13 @@
+- name: Install Docker
+  hosts: managers
+  become: true
+  become_user: "{{ docker_username }}"
+  gather_facts: false
+  tasks:
+    - name: Ensure Docker Swarm is initialized
+      ansible.builtin.shell: |
+        source /home/{{ docker_username }}/.profile && \
+        docker info | grep -q 'Swarm: active' || \
+        docker swarm init --advertise-addr {{ ansible_host }}
+      register: swarm_init_result
+      changed_when: "'Swarm initialized' in swarm_init_result.stdout"
