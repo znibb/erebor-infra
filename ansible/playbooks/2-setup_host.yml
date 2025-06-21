@@ -61,4 +61,15 @@
         state: started
         enabled: true
 
+    - name: Ensure TCP forwarding over SSH is enabled
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^AllowTcpForwarding\s+no'
+        line: 'AllowTcpForwarding yes'
+        state: present
+      register: sshd_restart
+
+    - name: Restart sshd
+      ansible.builtin.command: rc-service sshd restart
+      when: sshd_restart.changed
     
