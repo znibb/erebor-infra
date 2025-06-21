@@ -1,0 +1,64 @@
+- name: Setup host
+  hosts: all
+  become: true
+  become_method: doas
+  gather_facts: false
+  tasks:
+    - name: Install system management packages
+      community.general.apk:
+        update_cache: false
+        name: 
+          - ansible
+          - git
+          - shadow
+          - sudo
+        state: present
+
+    - name: Create sudo group
+      ansible.builtin.group:
+        name: sudo
+        system: true
+        state: present
+
+    - name: Allow members of sudo group to use sudo
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/sudo-group
+        content: "%sudo ALL=(ALL:ALL) ALL\n"
+        owner: root
+        group: root
+        mode: '0440'
+
+    - name: "Ensure {{ ansible_user }} user is a member of sudo group"
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        state: present
+        groups:
+          - sudo
+        append: true
+
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ node_name }}"
+
+    - name: Ensure /etc/hostname contains the correct hostname
+      ansible.builtin.copy:
+        dest: /etc/hostname
+        content: "{{ node_name }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Set hostname in /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.0\.1'
+        line: "127.0.0.1 {{ node_name }}.localdomain {{ node_name }} localhost.localdomain localhost"
+        create: yes
+
+    - name: Ensure NTP service is running
+      ansible.builtin.service:
+        name: ntpd
+        state: started
+        enabled: true
+
+    

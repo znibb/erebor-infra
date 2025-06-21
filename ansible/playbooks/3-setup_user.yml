@@ -1,0 +1,32 @@
+- name: Setup docker user
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  tasks:
+    - name: Ensure docker user exists
+      ansible.builtin.user:
+        name: "{{ docker_username }}"
+        password: '*' # No password but still enabled account ('!' for disabled account)
+        update_password: on_create
+        state: present
+        create_home: true
+        append: true
+        groups:
+          - sudo
+          - wheel
+
+    - name: Copy local ssh key to remote user
+      ansible.posix.authorized_key:
+        user: "{{ docker_username }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/docker-erebor.pub') }}"
+
+    - name: Git clone dotfiles repo
+      become_user: "{{ docker_username }}"
+      ansible.builtin.git:
+        repo: https://github.com/znibb/dotfiles.git
+        dest: "/home/{{ docker_username }}/.dotfiles"
+        version: main
+        depth: 1
+        update: false

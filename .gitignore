@@ -4,3 +4,5 @@ terraform/.terraform.tfstate.lock.info
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/credentials.auto.tfvars
+terraform/.tmp
+ansible/inventory.ini

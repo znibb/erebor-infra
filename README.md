@@ -34,7 +34,9 @@ IaC repo for Erebor
   - [NFS share for use in Proxmox](#nfs-share-for-use-in-proxmox)
 - [Terraform](#terraform)
   - [Proxmox setup](#proxmox-setup)
+  - [Local setup](#local-setup)
   - [Win 10 vm](#win-10-vm)
+- [Ansible](#ansible)
 
 ## Future upgrades
 1. Change motherboard/RAM to enable using ECC memory
@@ -272,12 +274,18 @@ Now you should be able to open your Windows VM and run `iSCSI Initiator`, enter 
 We need to manually add qemu-guest-agent after install for Terraform to be able to communicate properly when setting up new nodes based on the template
 
 1. Run through setup-alpine normally
-2. Check that community repos were enabled in `/etc/apk/repositories`
-3. Enable guest agent on boot, `rc-update add qemu-guest-agent`
-4. Start guest agent service, `service qemu-guest-agent start`
-5. Reboot VM, `reboot`
-6. Power off VM (Pause->Stop)
-7. Convert to template
+  - Machine: q35
+  - BIOS: Default (SeaBIOS)
+  - Qemu Agent: Checked
+  - Storage: vm-storage
+  - Default credentials: root/<blank>
+1. Reboot
+1. Check that community repos were enabled in `/etc/apk/repositories`
+1. Install qemu-guest-agent, `apk add qemu-guest-agent`
+1. Enable guest agent on boot, `rc-update add qemu-guest-agent`
+1. Start guest agent service, `service qemu-guest-agent start`
+1. Power off VM (Pause->Stop)
+1. Convert to template
 
 ## TrueNAS
 Instructions for how to set up the TrueNAS VM under Proxmox (written for TrueNAS Scale 24.10)
@@ -358,17 +366,33 @@ See Proxmox [backups](#backups) section
 ### Local setup
 For convenience sake terraform will be run through the use of a Docker container.
 
+1. Enter the `terraform` subdirectory
 1. Copy `credentials.template` to `credentials.auto.tfvars` and update the capitalized parts with your relevant information: `cp credentials.template credentials.auto.tfvars`
-2. 
+1. Run `./terraform.sh plan` to check planned changes
+1. Run `./deploy.sh`
 
 ### Win 10 vm
-1. Terraform apply
-2. Proxmox->Options, change `OS Type` to `Microsoft Windows 10/2016/2019`, enable `QEMU Guest Agent`,
-3. Hardware->Network Device, check `Disabled` to disable connectivity (this to be able to set up Windows without a Microsoft account)
-4. Start VM and immediately enter `Console`, be ready to press any key to enter setup
-5. Run through the Windows install
+1. Proxmox->Options, change `OS Type` to `Microsoft Windows 10/2016/2019`, enable `QEMU Guest Agent`,
+1. Hardware->Network Device, check `Disabled` to disable connectivity (this to be able to set up Windows without a Microsoft account)
+1. Start VM and immediately enter `Console`, be ready to press any key to enter setup
+1. Run through the Windows install
   1. Select Custom
-  2. Load Drivers, select `Red Hat VirtIO SCSI pass-through controller (D:\amd64\w10\vioscsi.inf)
-6. When Windows starts re-enable the network device in Proxmox
-7. Install the `virtio-win-gt-x64.msi` file from the virtio cdrom drive
-8. Install the Guest Agent file from the virtio cdrom drive (D:\guest-agent\qemu-ga-x86_64.msi)
+  1. Load Drivers, select `Red Hat VirtIO SCSI pass-through controller (D:\amd64\w10\vioscsi.inf)
+1. When Windows starts re-enable the network device in Proxmox
+1. Install the `virtio-win-gt-x64.msi` file from the virtio cdrom drive
+1. Install the Guest Agent file from the virtio cdrom drive (D:\guest-agent\qemu-ga-x86_64.msi)
+
+## Ansible
+1. Create an ssh key for use with ansible to connect to various hosts: `ssh-keygen -t ed25519 -C USER@HOST -f ansible-erebor` (suggested to run from ~/.ssh)
+1. Create an ssh key for manually logging into the server as the `docker` user: `ssh-keygen -t ed25519 -C USER@HOST -f docker-erebor` (suggested to run from ~/.ssh)
+1. Enter the `ansible` subdirectory
+1. Install the required ansible collections: `ansible-galaxy install -r requirements.yml`
+1. Run `./deploy.sh`
+1. Connect via ssh as the `ansible` user: `ssh ansible@dockerbox -i ~/.ssh/ansible-erebor`
+1. Set a password for the `docker` user (to be able to use sudo): `sudo passwd docker`
+1. Disconnect (Ctrl+D)
+1. Connect using ssh: `ssh docker@dockerbox -i ~/.ssh/docker-erebor`
+1. Go to `~/.dotfiles` and run `ansible-playbook hosts-dockerbox.yml` to set up dotfiles
+
+### Testing help
+* Check connectivity/permissions with controlled nodes: `ansible <group> -i inventory.ini -m ping`

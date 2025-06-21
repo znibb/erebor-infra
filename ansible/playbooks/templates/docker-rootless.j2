@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+
+name=$RC_SVCNAME
+description="Docker Application Container Engine (Rootless)"
+supervisor="supervise-daemon"
+command="/home/{{ docker_username }}/bin/dockerd-rootless.sh"
+command_args=""
+command_user="{{ docker_username }}"
+supervise_daemon_args=" -e PATH=\"/home/{{ docker_username }}/bin:/sbin:/usr/sbin:$PATH\" -e HOME=\"/home/{{ docker_username }}\" -e XDG_RUNTIME_DIR=\"/home/{{ docker_username }}/.docker/run\""
+
+reload() {
+    ebegin "Reloading $RC_SVCNAME"
+    /bin/kill -s HUP \$MAINPID
+    eend $?
+}

@@ -1,0 +1,135 @@
+- name: Install Docker
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Install Docker and dependencies
+      community.general.apk:
+        update_cache: false
+        name:
+          - curl
+          - shadow-subids # for newuidmap and newgidmap
+          - fuse-overlayfs
+          - iproute2
+          - iptables
+          - slirp4netns
+          - docker
+          - docker-cli-compose
+
+    - name: "Allow 'ansible' user to sudo as '{{ docker_username }}' without password"
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/ansible-{{ docker_username }}"
+        content: |
+          ansible ALL=( {{ docker_username }} ) NOPASSWD: ALL
+        mode: '0440'
+        
+    - name: Enable ip_tables kernel module
+      community.general.modprobe:
+        name: ip_tables
+        state: present
+        persistent: present
+
+    - name: Enable nf_tables kernel module
+      community.general.modprobe:
+        name: nf_tables
+        state: present
+        persistent: present
+
+    - name: Ensure subordinate UID range is configured for user "docker"
+      ansible.builtin.lineinfile:
+        path: /etc/subuid
+        line: "{{ docker_username }}:100000:65536"
+        create: yes
+        state: present
+
+    - name: Ensure subordinate GID range is configured for user "docker"
+      ansible.builtin.lineinfile:
+        path: /etc/subgid
+        line: "{{ docker_username }}:100000:65536"
+        create: yes
+        state: present
+    
+    - name: Allow ports < 1024
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.ip_unprivileged_port_start=80
+        create: yes
+        state: present
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Ensure ~/.profile contains PATH export
+      ansible.builtin.lineinfile:
+        path: "/home/{{ docker_username }}/.profile"
+        line: 'export PATH=$HOME/bin:$PATH'
+        create: yes
+        state: present
+        owner: "{{ docker_username }}"
+        group: "{{ docker_username }}"
+        mode: '0644'
+
+    - name: Ensure ~/.profile contains XDG_RUNTIME_DIR export
+      ansible.builtin.lineinfile:
+        path: "/home/{{ docker_username }}/.profile"
+        line: 'export XDG_RUNTIME_DIR=/home/{{ docker_username }}/.docker/run'
+        create: yes
+        state: present
+        owner: "{{ docker_username }}"
+        group: "{{ docker_username }}"
+        mode: '0644'
+
+    - name: Ensure ~/.profile contains DOCKER_HOST export
+      ansible.builtin.lineinfile:
+        path: "/home/{{ docker_username }}/.profile"
+        line: 'export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock'
+        create: yes
+        state: present
+        owner: "{{ docker_username }}"
+        group: "{{ docker_username }}"
+        mode: '0644'
+
+    - name: Ensure ~/.profile contains DOCKERD_ROOTLESS_ROOTLESSKIT_FLAGS export
+      ansible.builtin.lineinfile:
+        path: "/home/{{ docker_username }}/.profile"
+        line: 'export DOCKERD_ROOTLESS_ROOTLESSKIT_FLAGS="--net=slirp4netns"'
+        create: yes
+        state: present
+        owner: "{{ docker_username }}"
+        group: "{{ docker_username }}"
+        mode: '0644'
+
+    - name: Append systemd.unified_cgroup_hierarchy=1 to extlinux.conf kernel line
+      ansible.builtin.lineinfile:
+        path: /boot/extlinux.conf
+        regexp: '^(.*rootfstype=ext4)$'
+        line: '\1 systemd.unified_cgroup_hierarchy=1'
+        backrefs: yes
+
+    - name: Enable and start the 'cgroups' service
+      ansible.builtin.service:
+        name: cgroups
+        state: started
+        enabled: true
+
+    - name: Install dockerd-rootless.sh
+      become: true
+      become_method: sudo
+      become_user: "{{ docker_username }}"
+      ansible.builtin.shell:
+        cmd: "curl -fsSL https://get.docker.com/rootless | sh"
+        creates: "/home/{{ docker_username }}/bin/dockerd-rootless.sh"
+
+    - name: Create docker-rootless service
+      ansible.builtin.template:
+        src: docker-rootless.j2
+        dest: /etc/init.d/docker-rootless
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Enable and start the 'docker-rootless' service
+      ansible.builtin.service:
+        name: docker-rootless
+        state: started
+        enabled: true
