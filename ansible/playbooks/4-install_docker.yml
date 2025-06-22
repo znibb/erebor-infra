@@ -35,6 +35,38 @@
         state: present
         persistent: present
 
+    - name: Enable br_netfilter kernel module
+      community.general.modprobe:
+        name: br_netfilter
+        state: present
+        persistent: present
+
+    - name: Enable packet filtering on bridged traffic
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        line: net.bridge.bridge-nf-call-iptables=1
+        create: yes
+        state: present
+        owner: root
+        group: root
+        mode: '0644'
+      register: sysctl_conf1
+    
+    - name: Allow ports < 1024
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.ip_unprivileged_port_start=80
+        create: yes
+        state: present
+        owner: root
+        group: root
+        mode: '0644'
+      register: sysctl_conf2
+
+    - name: Reload sysctl settings
+      ansible.builtin.command: sysctl -p /etc/sysctl.conf
+      when: sysctl_conf1.changed or sysctl_conf2.changed
+
     - name: Ensure subordinate UID range is configured for user "docker"
       ansible.builtin.lineinfile:
         path: /etc/subuid
@@ -48,16 +80,6 @@
         line: "{{ docker_username }}:100000:65536"
         create: yes
         state: present
-    
-    - name: Allow ports < 1024
-      ansible.builtin.lineinfile:
-        path: /etc/sysctl.conf
-        line: net.ipv4.ip_unprivileged_port_start=80
-        create: yes
-        state: present
-        owner: root
-        group: root
-        mode: '0644'
 
     - name: Ensure ~/.profile contains PATH export
       ansible.builtin.lineinfile:
