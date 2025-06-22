@@ -2,4 +2,4 @@
 - import_playbook: playbooks/2-setup_host.yml
 - import_playbook: playbooks/3-setup_user.yml
 - import_playbook: playbooks/4-install_docker.yml
-- import_playbook: playbooks/5-init_swarm.yml
+# - import_playbook: playbooks/5-init_swarm.yml
